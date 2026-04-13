@@ -9,6 +9,25 @@ This is the single monorepo for the complete capstone system:
 - Embedded firmware for IMU and UWB sensing
 - Communications and coordination services
 
+## Problem Context and Objective
+
+Pickleball has grown rapidly since the COVID-19 pandemic, first surging in the United States and then expanding across Southeast Asia. In Singapore, demand for play spaces has increased sharply, indicating a clear shift from niche participation to mainstream recreational adoption.
+
+However, dedicated court infrastructure has not expanded at the same pace. Players often rely on shared or improvised venues such as badminton courts and neighborhood spaces. These spaces are typically noise-sensitive, and the repeated high-impact sound of paddle-ball and ball-floor contact can cause significant disturbance in dense Housing and Development Board (HDB) environments, contributing to rising community friction around play.
+
+This project addresses the challenge of sustaining pickleball growth and accessibility in densely populated Singaporean neighborhoods while providing a noise-free, space-efficient training and gameplay experience that is not limited by the availability of dedicated pickleball courts.
+
+If left unresolved, noise disputes may reduce community tolerance for recreational play and constrain the sport's continued growth. The significance of this project lies in balancing the needs of pickleball enthusiasts and residents by reducing dependence on scarce, noise-sensitive physical courts while preserving play accessibility.
+
+The primary objective is to build a comprehensive Augmented Reality (AR) pickleball training and gameplay system that operates reliably in limited spaces. To achieve this, the project integrates:
+
+- Wearable and racket-embedded IMU sensing for real-time swing dynamics capture
+- A multi-task neural network for opponent racket-state and shot-type prediction
+- Ultra96 deployment using Vitis HLS fixed-point inference, with scaling handled at the ARM side
+- End-to-end system integration across sensing, communications, AI inference, and Unity visualisation
+
+The system is evaluated under realistic gameplay conditions for prediction accuracy, end-to-end latency, and FPGA resource and timing feasibility.
+
 ## System Overview
 
 The system is a real-time loop between sensors, inference, and AR rendering.
@@ -32,17 +51,16 @@ ESP32 IMU/UWB --> MQTT broker --> Unity Visualiser
 
 ## Repository Structure
 
-The repository is organised into four product folders, with supporting repository folders.
+The repository is organised into major product folders, with supporting repository folders.
 
 | Path | Purpose | Entry point |
 |---|---|---|
 | `AI/accelerator` | Model training, quantisation, deployment scripts, and Ultra96 runtime tooling | [AI/accelerator/training/train.py](AI/accelerator/training/train.py) |
 | `AI/hls` | HLS implementation and Vivado/Vitis projects | [AI/hls/pickleball_model.cpp](AI/hls/pickleball_model.cpp) |
 | `Visualiser` | Unity AR client, gameplay, MQTT integration, and game logic | [Visualiser/Assets/Scenes/MainScene.unity](Visualiser/Assets/Scenes/MainScene.unity) |
-| `hardware/imu` | IMU firmware and motion processing | [hardware/imu/main_code.ino](hardware/imu/main_code.ino) |
-| `hardware/uwb` | UWB firmware and player position processing | [hardware/uwb/UWB_sensor.ino](hardware/uwb/UWB_sensor.ino) |
-| `communications` | Go services for SSH tunnel, coordination, and metrics | [communications/main.go](communications/main.go) |
-| `.github` | Pull request templates and repository standards | [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md) |
+| `Hardware/imu` | IMU firmware and motion processing | [Hardware/imu/main_code.ino](Hardware/imu/main_code.ino) |
+| `Hardware/uwb` | UWB firmware and player position processing | [Hardware/uwb/UWB_sensor.ino](Hardware/uwb/UWB_sensor.ino) |
+| `Communications` | Go services for SSH tunnel, coordination, and metrics | [Communications/main.go](Communications/main.go) |
 
 ## Key Technical References
 
@@ -95,12 +113,12 @@ Other useful operational commands:
 
 ### Hardware Firmware
 
-1. IMU entry point: [hardware/imu/main_code.ino](hardware/imu/main_code.ino).
-2. UWB entry point: [hardware/uwb/UWB_sensor.ino](hardware/uwb/UWB_sensor.ino).
+1. IMU entry point: [Hardware/imu/main_code.ino](Hardware/imu/main_code.ino).
+2. UWB entry point: [Hardware/uwb/UWB_sensor.ino](Hardware/uwb/UWB_sensor.ino).
 
 ### Communications Service
 
-From [communications](communications), run:
+From [Communications](Communications), run:
 
 ```bash
 go run .
@@ -108,9 +126,9 @@ go run .
 
 Primary files:
 
-- [communications/main.go](communications/main.go)
-- [communications/system-coordinator.go](communications/system-coordinator.go)
-- [communications/network-metrics.go](communications/network-metrics.go)
+- [Communications/main.go](Communications/main.go)
+- [Communications/system-coordinator.go](Communications/system-coordinator.go)
+- [Communications/network-metrics.go](Communications/network-metrics.go)
 
 ## Core MQTT Topics
 
@@ -138,8 +156,8 @@ The following sensitive files were removed from source control for security reas
 
 Embedded certificate and key material was also removed from:
 
-- [hardware/imu/config.h](hardware/imu/config.h)
-- [hardware/uwb/config.h](hardware/uwb/config.h)
+- [Hardware/imu/config.h](Hardware/imu/config.h)
+- [Hardware/uwb/config.h](Hardware/uwb/config.h)
 
 ## Attribution and Team Credits
 

@@ -2,7 +2,7 @@
 
 Pick-0-Ball was developed as part of the National University of Singapore (NUS) CG4002 Capstone Project by Group B03.
 
-This is the single monorepo for the complete capstone system:
+This is the single repository for the complete capstone system:
 
 - Unity AR visualiser and gameplay loop
 - AI training and Ultra96 FPGA inference

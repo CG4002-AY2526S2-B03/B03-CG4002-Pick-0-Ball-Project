@@ -91,7 +91,7 @@ public class TutorialUIManager : MonoBehaviour
         if (gameState != null)
             gameState.OnModeChanged += OnModeChanged;
 
-        // Hide video display by default  -  only shown when a clip is playing
+        // Hide video display by default — only shown when a clip is playing
         demoVideoDisplay?.gameObject.SetActive(false);
         restartButton?.gameObject.SetActive(false);
 
@@ -214,10 +214,10 @@ public class TutorialUIManager : MonoBehaviour
     private void ShowPlaceCourtGuide()
     {
         titleText.text = "HOW TO START THE GAME";
-        instructionText.text = "Step 1: Scan the floor QR code to spawn the court\n\nStep 2: Press Button 2 to begin calibration!";
+        instructionText.text = "Step 1: Scan the floor AprilTag code to spawn the court\n\nStep 2: Press Button 2 to begin calibration!";
 
         PlayVideo(placeCourtGuideVideo);
-        HideNextButton();  // Auto-advances on QR detection
+        HideNextButton();  // Auto-advances on AprilTag detection
     }
 
     private void ShowPressButtonToCalibrate()

@@ -74,7 +74,7 @@ public class StereoscopicAR : MonoBehaviour
         canvasGO.transform.localRotation = Quaternion.identity;
         canvasGO.transform.localScale    = Vector3.one * scale;
 
-        // CanvasScaler is not applicable to WorldSpace  -  remove if present
+        // CanvasScaler is not applicable to WorldSpace — remove if present
         var scaler = canvasGO.GetComponent<UnityEngine.UI.CanvasScaler>();
         if (scaler != null) Destroy(scaler);
     }

@@ -8,7 +8,7 @@ using UnityEngine;
 /// </summary>
 public class RecalibrateUI : MonoBehaviour
 {
-    [Header("References (unused  -  kept for scene compatibility)")]
+    [Header("References (unused — kept for scene compatibility)")]
     [SerializeField] private GameStateManager gameState;
     [SerializeField] private PracticeBallController ballController;
     [SerializeField] private PlaceTrackedImages imageTracker;

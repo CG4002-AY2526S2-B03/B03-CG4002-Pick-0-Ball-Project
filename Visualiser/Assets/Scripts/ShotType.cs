@@ -8,6 +8,6 @@ public enum ShotType
     Drop       = 1,   // Soft arching shot (lands in kitchen)
     Dink       = 2,   // Soft, controlled short shot
     Lob        = 3,   // High arching defensive shot
-    SpeedUp    = 4,   // Fast attack  -  plays like Drive
-    HandBattle = 5    // Quick reflex  -  plays like Drive
+    SpeedUp    = 4,   // Fast attack — plays like Drive
+    HandBattle = 5    // Quick reflex — plays like Drive
 }

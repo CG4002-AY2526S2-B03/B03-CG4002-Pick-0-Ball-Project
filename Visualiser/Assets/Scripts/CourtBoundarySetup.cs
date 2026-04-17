@@ -14,13 +14,13 @@ public class CourtBoundarySetup : MonoBehaviour
     [Tooltip("The GameSpaceRoot transform. Auto-found by name if null.")]
     public Transform gameSpaceRoot;
 
-    [Header("Net (solid collider  -  ball bounces off)")]
+    [Header("Net (solid collider — ball bounces off)")]
     [Tooltip("Local position relative to GameSpaceRoot.")]
     public Vector3 netLocalPosition = new Vector3(0f, 0.3f, 0f);
     [Tooltip("BoxCollider size for the net.")]
     public Vector3 netSize = new Vector3(8f, 0.6f, 0.05f);
 
-    [Header("Kitchen / Non-Volley Zone (trigger  -  detects paddle entry)")]
+    [Header("Kitchen / Non-Volley Zone (trigger — detects paddle entry)")]
     [Tooltip("When false, the kitchen trigger is not created and kitchen faults are effectively removed from gameplay.")]
     public bool enableKitchenZone = false;
     [Tooltip("Local position relative to GameSpaceRoot.")]
@@ -38,7 +38,7 @@ public class CourtBoundarySetup : MonoBehaviour
 
         if (gameSpaceRoot == null)
         {
-            Debug.LogWarning("[CourtBoundarySetup] GameSpaceRoot not found  -  skipping setup.");
+            Debug.LogWarning("[CourtBoundarySetup] GameSpaceRoot not found — skipping setup.");
             return;
         }
 

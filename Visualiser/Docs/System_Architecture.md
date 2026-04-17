@@ -7,9 +7,9 @@
 ## Physical Setup
 
 ```
-         UWB Anchor A ──────── QR Code (net centre) ──────── UWB Anchor B
+         UWB Anchor A ──────── AprilTag Code (net centre) ──────── UWB Anchor B
               │                       │                            │
-              │              net centre = QR anchor                │
+              │              net centre = AprilTag anchor                │
               │                       │                            │
               └────────── physical net line ───────────────────────┘
 
@@ -18,10 +18,10 @@
 
                              player stands here
                         phone on head (VR goggle mount)
-                       paddle in hand (IMU + QR on both faces)
+                       paddle in hand (IMU + AprilTag on both faces)
 ```
 
-**Court placement**: The QR code marks the net centre. When ARKit detects the QR, `PlaceAtAnchor()` creates an AR anchor at the QR's world position and parents `GameSpaceRoot` under it with an offset of `(0, 0, −5.4)`. This shifts the GameSpaceRoot origin (which is at the player-side baseline in local space) so that the net position (`z = 5.4` in court-local) lands exactly on the QR anchor. The camera is NOT fixed  -  it renders wherever the player physically stands relative to the court.
+**Court placement**: The AprilTag code marks the net centre. When ARKit detects the AprilTag, `PlaceAtAnchor()` creates an AR anchor at the AprilTag's world position and parents `GameSpaceRoot` under it with an offset of `(0, 0, −5.4)`. This shifts the GameSpaceRoot origin (which is at the player-side baseline in local space) so that the net position (`z = 5.4` in court-local) lands exactly on the AprilTag anchor. The camera is NOT fixed — it renders wherever the player physically stands relative to the court.
 
 **Devices (4 nodes):**
 
@@ -52,9 +52,9 @@ UWB sensors (x2)          FireBeetle ESP32              AR System (iPhone)
 
 **Positioning:** The ESP32 computes the player's 2D position (x=lateral, y=depth) in the court coordinate frame from the two UWB distance readings. The result is published as JSON on `/playerPosition`.
 
-**Anchor placement:** Two UWB anchors are positioned at either end of the net line (Anchor A and Anchor B), co-located with the QR code at the net centre.
+**Anchor placement:** Two UWB anchors are positioned at either end of the net line (Anchor A and Anchor B), co-located with the AprilTag code at the net centre.
 
-**MQTT payload:** `{"clientID":"player1","position":{"x":3.2,"y":1.5}}`  -  x=lateral (metres from centre), y=depth (metres from net, towards player baseline).
+**MQTT payload:** `{"clientID":"player1","position":{"x":3.2,"y":1.5}}` — x=lateral (metres from centre), y=depth (metres from net, towards player baseline).
 
 **Unity consumption:** `MqttController` receives `/playerPosition` and uses it for UWB drift correction on `gameSpaceRoot`. The 2D UWB position (court frame) is compared against the AR camera's court-local X/Z position each frame. If drift exceeds 5 cm, `gameSpaceRoot` is nudged at 0.3 m/s (capped at 2 cm/frame) to correct accumulated AR camera drift without fighting ARKit tracking.
 
@@ -74,6 +74,7 @@ UWB sensors (x2)          FireBeetle ESP32              AR System (iPhone)
 | `/positionCalibration` | Unity → ESP32 | 1 | `{"isCalibrated":1}` | UWB position calibration ack |
 | `/paddleCalibration` | Unity → ESP32 | 1 | `{"isCalibrated":1}` | IMU paddle calibration ack |
 | `/hitAck` | Unity → ESP32 | 1 | `{"hit":true}` | Haptic feedback trigger |
+| `/fpgaTime` | Unity → broker | 1 | `{"sequence","sentUtcMs","receivedUtcMs","latencyMs"}` | Unity-measured latency from `/playerBall` send to `/opponentBall` receive |
 | `status/u96` | Ultra96 → broker | 0 | `"READY"` (retained) | Ultra96 readiness status |
 | `system/signal` | broker → Ultra96 | 0 | `"START"` | Game start signal |
 | `/will` | broker (LWT) | 1 | `"U96 DISCONNECTED"` | Ultra96 disconnection notification |
@@ -95,7 +96,7 @@ Two deployment paths exist between the Ultra96 and the MQTT broker:
 | Button | Action |
 |--------|--------|
 | 1 | Start / Pause / Resume |
-| 2 | Full Reset + Calibrate (resets gameplay/ball/court/paddle, re-scans QR, calibrates UWB + IMU) |
+| 2 | Full Reset + Calibrate (resets gameplay/ball/court/paddle, re-scans AprilTag, calibrates UWB + IMU) |
 | 3 | Reset Ball |
 | 4 | Cycle Mode (pre-game) / Full Reset (in-game) |
 
@@ -192,41 +193,41 @@ The FPGA handles input scaling, inference, and output inverse-scaling entirely o
 
 ---
 
-## Dual-Sided Paddle QR Tracking
+## Dual-Sided Paddle AprilTag Tracking
 
-The physical paddle has a QR code on both faces  -  `racket_marker.png` (front) and `racket_marker_mirror.png` (back, horizontally mirrored). Both are registered in the AR Reference Image Library:
+The physical paddle has a AprilTag code on both faces — `racket_marker.png` (front) and `racket_marker_mirror.png` (back, horizontally mirrored). Both are registered in the AR Reference Image Library:
 
 | Image Name | Texture | Size | Purpose |
 |------------|---------|------|---------|
 | `Racket_PickleBall4` | `racket_marker.png` | 0.1×0.1m | Front face (primary) |
 | `Racket_Pickleball4_back` | `racket_marker_mirror.png` | 0.1×0.1m | Back face (mirrored) |
 
-Both QR codes drive a **single shared paddle instance** (the `Racket_PickleBall4` prefab). When the back QR is detected, a 180° roll (Z-axis) flip is applied to cancel the inverted orientation that ARKit reports for the mirrored image:
+Both AprilTag codes drive a **single shared paddle instance** (the `Racket_PickleBall4` prefab). When the back AprilTag is detected, a 180° roll (Z-axis) flip is applied to cancel the inverted orientation that ARKit reports for the mirrored image:
 
 ```
 Front: paddleRotation = trackedImage.rotation × prefabRotOffset
 Back:  paddleRotation = trackedImage.rotation × Euler(0,0,180) × prefabRotOffset
 ```
 
-The `BackFaceFlip` makes front and back QR produce **identical visual paddle orientation**, so:
-- The player can swing freely without losing QR tracking when the paddle rotates past 90°
+The `BackFaceFlip` makes front and back AprilTag produce **identical visual paddle orientation**, so:
+- The player can swing freely without losing AprilTag tracking when the paddle rotates past 90°
 - The IMU-to-world offset (`imuToWorldOffset`) learned from either side is correct, since it's always derived from the flip-corrected rotation
-- When QR is lost (stale mode), the frozen offset maps IMU correctly regardless of which side was last tracked
+- When AprilTag is lost (stale mode), the frozen offset maps IMU correctly regardless of which side was last tracked
 
 ---
 
 ## Paddle Control Priority
 
 ```
-1. Fresh QR + IMU    → QR position, IMU rotation/velocity (auto-calibrates IMU-to-world offset)
-2. Stale QR + IMU    → last QR pos + v·dt + swing arc, IMU world rotation (QR-calibrated)
+1. Fresh AprilTag + IMU    → AprilTag position, IMU rotation/velocity (auto-calibrates IMU-to-world offset)
+2. Stale AprilTag + IMU    → last AprilTag pos + v·dt + swing arc, IMU world rotation (AprilTag-calibrated)
 3. IMU-only          → camera anchor + IMU displacement
-4. Fresh QR only     → QR position/rotation, finite-diff velocity
-5. Stale QR only     → freeze at last QR position
+4. Fresh AprilTag only     → AprilTag position/rotation, finite-diff velocity
+5. Stale AprilTag only     → freeze at last AprilTag position
 6. Camera fallback   → mouse/touch position
 ```
 
-**IMU-to-world alignment**: While QR is active (front or back), every frame learns `imuToWorldOffset = qrWorldRotation × Inverse(calibratedIMU)`. The QR rotation is already flip-corrected, so the offset is consistent regardless of which paddle face is visible. When QR is lost, this frozen offset correctly maps IMU yaw to court space.
+**IMU-to-world alignment**: While AprilTag is active (front or back), every frame learns `imuToWorldOffset = aprilTagWorldRotation × Inverse(calibratedIMU)`. The AprilTag rotation is already flip-corrected, so the offset is consistent regardless of which paddle face is visible. When AprilTag is lost, this frozen offset correctly maps IMU yaw to court space.
 
 **Stale mode formula** (rotation computed first for correct lever arm):
 ```
@@ -254,21 +255,21 @@ This corrects AR camera drift without fighting ARKit. Everything under GameSpace
 
 ```
 Root
-├── MqttReceiver           -  MQTT client (MqttReceiver, MqttController)
-├── AR Session             -  ARKit session
-├── PlayerPaddle           -  Physics paddle (PaddleHitController, ImuPaddleController)
-├── XR Origin (AR Rig)     -  AR camera + ARPlaneGameSpacePlacer
+├── MqttReceiver          — MQTT client (MqttReceiver, MqttController)
+├── AR Session            — ARKit session
+├── PlayerPaddle          — Physics paddle (PaddleHitController, ImuPaddleController)
+├── XR Origin (AR Rig)    — AR camera + ARPlaneGameSpacePlacer
 │   └── Camera Offset
-│       └── Main Camera    -  StereoscopicAR
-├── GameFlowManager        -  GameStateManager, CourtBoundarySetup, ScoreboardUI
-├── GameSpaceRoot          -  Court anchor (placed by QR + AR plane)
-│   ├── pickleball court   -  Court model
-│   ├── Ball2              -  Ball (PracticeBallController, BallContactDetector, BallAerodynamics)
-│   ├── Bot                -  AI opponent (BotHitController, BotShotProfile)
-│   ├── walls              -  Court boundaries (CourtBoundary tags)
-│   └── BotAimTarget       -  3 target positions for bot shots
-├── Canvas                 -  Debug UI
-└── EventSystem            -  Input
+│       └── Main Camera   — StereoscopicAR
+├── GameFlowManager       — GameStateManager, CourtBoundarySetup, ScoreboardUI
+├── GameSpaceRoot         — Court anchor (placed by AprilTag + AR plane)
+│   ├── pickleball court  — Court model
+│   ├── Ball2             — Ball (PracticeBallController, BallContactDetector, BallAerodynamics)
+│   ├── Bot               — AI opponent (BotHitController, BotShotProfile)
+│   ├── walls             — Court boundaries (CourtBoundary tags)
+│   └── BotAimTarget      — 3 target positions for bot shots
+├── Canvas                — Debug UI
+└── EventSystem           — Input
 ```
 
 ---
@@ -308,7 +309,7 @@ flowchart LR
         BALL["PracticeBallController"]
         BOT["BotHitController"]
         GS["GameStateManager"]
-        QR["PlaceTrackedImages"]
+        AprilTag["PlaceTrackedImages"]
         DRIFT["UWB Drift\nCorrection"]
     end
 
@@ -319,7 +320,7 @@ flowchart LR
     MQTT --> PAD
     IMU_C --> PAD
 
-    QR --> PAD
+    AprilTag --> PAD
     PAD -->|hit detected| BALL
     PAD -->|"/playerBall"| MQTT
     MQTT -->|"/playerBall"| B
@@ -336,7 +337,7 @@ flowchart LR
     B --> MOTOR
 
     MQTT -->|"/playerPosition"| DRIFT
-    DRIFT -->|corrects| QR
+    DRIFT -->|corrects| AprilTag
 
     PAD --> GS
     BOT --> GS
@@ -370,36 +371,36 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> CameraFallback : No QR, no IMU
+    [*] --> CameraFallback : No AprilTag, no IMU
 
     CameraFallback --> IMUOnly : IMU activated (first /paddle payload)
-    CameraFallback --> FreshQR : QR detected (no IMU)
+    CameraFallback --> FreshAprilTag : AprilTag detected (no IMU)
 
-    IMUOnly --> FreshQR_IMU : QR detected while IMU active
+    IMUOnly --> FreshAprilTag_IMU : AprilTag detected while IMU active
 
-    FreshQR --> FreshQR_IMU : IMU activated while QR active
+    FreshAprilTag --> FreshAprilTag_IMU : IMU activated while AprilTag active
 
-    FreshQR_IMU --> StaleQR_IMU : QR tracking lost
-    FreshQR_IMU --> FreshQR_IMU : QR active (auto-calibrate IMU offset each frame)
+    FreshAprilTag_IMU --> StaleAprilTag_IMU : AprilTag tracking lost
+    FreshAprilTag_IMU --> FreshAprilTag_IMU : AprilTag active (auto-calibrate IMU offset each frame)
 
-    StaleQR_IMU --> FreshQR_IMU : QR tracking restored (snap back, reset displacement)
-    StaleQR_IMU --> StaleQR_IMU : Integrate pos += v*dt + swing arc
+    StaleAprilTag_IMU --> FreshAprilTag_IMU : AprilTag tracking restored (snap back, reset displacement)
+    StaleAprilTag_IMU --> StaleAprilTag_IMU : Integrate pos += v*dt + swing arc
 
-    FreshQR --> StaleQR : QR lost (no IMU)
-    StaleQR --> FreshQR : QR restored
+    FreshAprilTag --> StaleAprilTag : AprilTag lost (no IMU)
+    StaleAprilTag --> FreshAprilTag : AprilTag restored
 
-    note right of FreshQR_IMU
+    note right of FreshAprilTag_IMU
         Primary mode during gameplay.
-        QR gives position.
+        AprilTag gives position.
         IMU gives rotation + velocity.
         Auto-calibrates imuToWorldOffset.
     end note
 
-    note right of StaleQR_IMU
-        Active during swings (QR on both paddle faces lost).
-        Position = lastQR + sum(v*dt) + swing arc.
+    note right of StaleAprilTag_IMU
+        Active during swings (AprilTag on both paddle faces lost).
+        Position = lastAprilTag + sum(v*dt) + swing arc.
         Rotation = imuToWorldOffset * calibratedIMU.
-        Offset is consistent whether learned from front or back QR.
+        Offset is consistent whether learned from front or back AprilTag.
     end note
 ```
 
@@ -438,7 +439,7 @@ Compensates for AR positional inaccuracy by providing a proximity-based hit assi
 **Trigger conditions (all must be true):**
 - `enableFlick = true` (Inspector toggle)
 - IMU is active (`ImuPaddleController.IsActive`)
-- Swing speed ≥ `flickMinSwingSpeed` (0.5 m/s)  -  computed as `|linearVel| + |angularVel| × imuToFaceDistance`
+- Swing speed ≥ `flickMinSwingSpeed` (0.5 m/s) — computed as `|linearVel| + |angularVel| × imuToFaceDistance`
 - Ball is within `flickRadius` (0.2 m) of the paddle face centre
 - Ball is roughly in front of the paddle face (dot product check, tolerance −0.3)
 - Not in `flickCooldown` (0.3 s) or `hitCooldown`
@@ -447,7 +448,7 @@ Compensates for AR positional inaccuracy by providing a proximity-based hit assi
 
 **Physics:** Calls the same `ApplyHitImpulse()` as all other hit paths. Restitution, friction, max speed, spin, MQTT publish, and game-state registration all apply identically. The impulse scales naturally with the player's actual swing speed via `paddleVelocity`.
 
-**Call sites:** `TryFlickAssist()` is called in all three IMU mode blocks (Fresh QR+IMU, Stale QR+IMU, IMU-only), after `TryProximityHit()`.
+**Call sites:** `TryFlickAssist()` is called in all three IMU mode blocks (Fresh AprilTag+IMU, Stale AprilTag+IMU, IMU-only), after `TryProximityHit()`.
 
 ### FPGA Inference Pipeline
 

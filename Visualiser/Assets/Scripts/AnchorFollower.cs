@@ -20,7 +20,7 @@ public class AnchorFollower : MonoBehaviour
     {
         if (_anchor == null)
         {
-            // Anchor was destroyed by ARFoundation  -  court stays in place.
+            // Anchor was destroyed by ARFoundation — court stays in place.
             // No need to disable: the court just stops getting drift updates.
             return;
         }

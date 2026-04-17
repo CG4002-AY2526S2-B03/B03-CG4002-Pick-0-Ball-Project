@@ -10,9 +10,9 @@ using System;
 ///   - Rally scoring: every rally produces a point outcome
 ///
 /// Game modes:
-///   Normal    -  Standard match rules. Game ends when a player wins best-of-N sets.
-///   Tutorial  -  No scoring. Ball resets after each rally. Practice only.
-///   GodMode   -  No scoring, match never ends. Opponent ball returns at 0.5x speed
+///   Normal   — Standard match rules. Game ends when a player wins best-of-N sets.
+///   Tutorial — No scoring. Ball resets after each rally. Practice only.
+///   GodMode  — No scoring, match never ends. Opponent ball returns at 0.5x speed
 ///              to give player advantage. State transitions still fire for demo.
 ///
 /// Attach to the GameFlowManager GameObject.
@@ -117,7 +117,7 @@ public class GameStateManager : MonoBehaviour
 
         if (Mode == GameMode.Normal)
             EnterNormalModePrePlayState(IsCourtPlacementPending()
-                ? "Scan court QR first"
+                ? "Scan court AprilTag first"
                 : "Press Button 1 to Play game");
     }
 
@@ -149,7 +149,7 @@ public class GameStateManager : MonoBehaviour
                 waitingToServeTimer += Time.deltaTime;
                 if (waitingToServeTimer >= WaitingToServeTimeout)
                 {
-                    Debug.LogWarning("[GameState] Ball missing during WaitingToServe  -  attempting recovery.");
+                    Debug.LogWarning("[GameState] Ball missing during WaitingToServe — attempting recovery.");
                     OnMessage?.Invoke("Recovering ball...");
                     TryRecoverBallWithAccounting("WaitingToServe watchdog");
                     waitingToServeTimer = 0f;
@@ -308,7 +308,7 @@ public class GameStateManager : MonoBehaviour
     {
         bool toPlayer = LastHitter == Hitter.Player;
         string scorer = toPlayer ? "Player scores" : "Bot scores";
-        Debug.Log($"[GameState] Rally win after valid return ({debugContext})  -  {scorer}");
+        Debug.Log($"[GameState] Rally win after valid return ({debugContext}) — {scorer}");
         AwardPoint(toPlayer, scorer, appendScorerSuffix: false);
     }
 
@@ -328,7 +328,7 @@ public class GameStateManager : MonoBehaviour
             return;
         }
 
-        // Ball bounced twice on one side  -  that side's player loses the point.
+        // Ball bounced twice on one side — that side's player loses the point.
         bool toPlayer = !bouncedOnPlayerSide;
         AwardPoint(toPlayer, toPlayer ? "Player scores" : "Bot scores", appendScorerSuffix: false);
     }
@@ -396,7 +396,7 @@ public class GameStateManager : MonoBehaviour
         if (Mode == GameMode.Tutorial || Mode == GameMode.GodMode)
         {
             string scorer = toPlayer ? "Player" : "Bot";
-            OnMessage?.Invoke(appendScorerSuffix ? $"{reason}  -  {scorer} side" : reason);
+            OnMessage?.Invoke(appendScorerSuffix ? $"{reason} — {scorer} side" : reason);
             FreezeBall();
             pointTimer = pointDisplayDuration;
             SetState(RallyState.PointScored);
@@ -410,7 +410,7 @@ public class GameStateManager : MonoBehaviour
             BotScore++;
 
         string scorerName = toPlayer ? "Player" : "Bot";
-        OnMessage?.Invoke(appendScorerSuffix ? $"{reason}  -  {scorerName} point" : reason);
+        OnMessage?.Invoke(appendScorerSuffix ? $"{reason} — {scorerName} point" : reason);
         OnScoreChanged?.Invoke();
 
         // Check set win
@@ -473,7 +473,7 @@ public class GameStateManager : MonoBehaviour
                 TryRecoverBallWithAccounting("Next set play gate");
 
             EnterNormalModePrePlayState(IsCourtPlacementPending()
-                ? "Scan court QR first"
+                ? "Scan court AprilTag first"
                 : "Press Button 1 to Play game");
             return;
         }
@@ -532,8 +532,8 @@ public class GameStateManager : MonoBehaviour
             Debug.LogWarning($"[GameState] Ball tag lookup failed during recovery: {exception.Message}");
         }
 
-        // Step 4: ball was destroyed  -  try runtime backup prefab
-        Debug.LogWarning("[GameState] Ball destroyed  -  respawning from backup.");
+        // Step 4: ball was destroyed — try runtime backup prefab
+        Debug.LogWarning("[GameState] Ball destroyed — respawning from backup.");
         Transform parent = FindGameSpaceRoot();
         ballController = PracticeBallController.RespawnFromBackup(parent);
         if (ballController != null)
@@ -545,7 +545,7 @@ public class GameStateManager : MonoBehaviour
             }
         }
 
-        // Step 5: absolute last resort  -  instantiate from the Inspector-assigned prefab
+        // Step 5: absolute last resort — instantiate from the Inspector-assigned prefab
         if (ballPrefab != null)
         {
             Debug.LogWarning("[GameState] Spawning from Inspector ballPrefab.");
@@ -557,7 +557,7 @@ public class GameStateManager : MonoBehaviour
             }
         }
 
-        Debug.LogError("[GameState] RecoverBall FAILED  -  no ball and no backup prefab.");
+        Debug.LogError("[GameState] RecoverBall FAILED — no ball and no backup prefab.");
         OnMessage?.Invoke("ERROR: Ball lost!");
         return false;
     }
@@ -621,7 +621,7 @@ public class GameStateManager : MonoBehaviour
             ? placer.GameSpaceRoot
             : FindGameSpaceRoot();
 
-        // Button 1 should require a fresh QR scan only when the QR-only court is
+        // Button 1 should require a fresh AprilTag scan only when the AprilTag-only court is
         // genuinely unavailable. If an active GameSpaceRoot is already present,
         // keep manual ball reset/rally flow usable on that court.
         return courtRoot == null || !courtRoot.gameObject.activeInHierarchy;
@@ -634,7 +634,7 @@ public class GameStateManager : MonoBehaviour
 
         if (IsCourtPlacementPending())
         {
-            Debug.Log("[GameState] Ball recovery deferred until court QR placement.");
+            Debug.Log("[GameState] Ball recovery deferred until court AprilTag placement.");
             return false;
         }
 
@@ -687,7 +687,7 @@ public class GameStateManager : MonoBehaviour
             ballController = PracticeBallController.GetLiveInstance();
         if (ballController == null)
         {
-            Debug.LogWarning("[GameState] FreezeBall: ball not found  -  cannot freeze.");
+            Debug.LogWarning("[GameState] FreezeBall: ball not found — cannot freeze.");
             return;
         }
         ballController.FreezeInPlace();
@@ -697,8 +697,8 @@ public class GameStateManager : MonoBehaviour
     {
         if (IsCourtPlacementPending())
         {
-            OnMessage?.Invoke("Scan court QR first");
-            Debug.Log("[GameState] Manual serve reset blocked until court QR placement.");
+            OnMessage?.Invoke("Scan court AprilTag first");
+            Debug.Log("[GameState] Manual serve reset blocked until court AprilTag placement.");
             return false;
         }
 
@@ -771,8 +771,8 @@ public class GameStateManager : MonoBehaviour
             {
                 if (IsCourtPlacementPending())
                 {
-                    EnterNormalModePrePlayState("Scan court QR first");
-                    Debug.Log("[GameState] Play blocked until court QR placement.");
+                    EnterNormalModePrePlayState("Scan court AprilTag first");
+                    Debug.Log("[GameState] Play blocked until court AprilTag placement.");
                     return;
                 }
 
@@ -858,7 +858,7 @@ public class GameStateManager : MonoBehaviour
         {
             requirePlayButtonBeforeNextNormalRally = false;
             EnterNormalModePrePlayState(IsCourtPlacementPending()
-                ? "Scan court QR first"
+                ? "Scan court AprilTag first"
                 : "Press Button 1 to Play game");
         }
         else
@@ -875,7 +875,7 @@ public class GameStateManager : MonoBehaviour
         if (Mode != GameMode.Normal || IsStarted)
             return;
 
-        EnterNormalModePrePlayState("Court ready  -  Press Button 1 to Play game");
+        EnterNormalModePrePlayState("Court ready — Press Button 1 to Play game");
     }
 
     public void NotifyCourtReset()
@@ -883,7 +883,7 @@ public class GameStateManager : MonoBehaviour
         if (Mode != GameMode.Normal)
             return;
 
-        EnterNormalModePrePlayState("Scan court QR first");
+        EnterNormalModePrePlayState("Scan court AprilTag first");
     }
 
     private void EnterNormalModePrePlayState(string message)
@@ -936,7 +936,7 @@ public class GameStateManager : MonoBehaviour
         if (!IsStarted)
         {
             if (Mode == GameMode.Normal)
-                EnterNormalModePrePlayState(IsCourtPlacementPending() ? "Scan court QR first" : "Press Button 1 to Play game");
+                EnterNormalModePrePlayState(IsCourtPlacementPending() ? "Scan court AprilTag first" : "Press Button 1 to Play game");
             else
                 Time.timeScale = 1f;
         }

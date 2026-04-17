@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -32,6 +33,17 @@ public class MqttController : MonoBehaviour
 
     [Tooltip("When enabled, logs raw and scaled outgoing player-ball velocity for AI payload verification.")]
     public bool logPlayerBallPublishVelocity = false;
+
+    [Header("FPGA Latency Diagnostics")]
+    [Tooltip("Publishes measured latency between /playerBall send and corresponding /opponentBall receive.")]
+    public bool publishFpgaLatency = true;
+
+    [Tooltip("MQTT topic used for Unity-measured FPGA round-trip latency diagnostics.")]
+    public string fpgaLatencyTopic = "/fpgaTime";
+
+    [Tooltip("Maximum number of pending /playerBall timestamps to keep while waiting for /opponentBall.")]
+    [Min(1)]
+    public int maxPendingFpgaLatencySamples = 8;
 
     [Header("Game Component References")]
     [Tooltip("IMU paddle controller for hardware-driven racket.")]
@@ -89,7 +101,7 @@ public class MqttController : MonoBehaviour
     private float _lastUwbReceiveTime = -1f;
     private bool _uwbTimedOut = false;
 
-    // UWB court-local player position  -  used for court anchoring
+    // UWB court-local player position — used for court anchoring
     private Vector3 _uwbCourtLocal;
     private bool _hasUwbCourtLocal;
     private float _lastAnchorLogTime;
@@ -101,7 +113,7 @@ public class MqttController : MonoBehaviour
     [Tooltip("Existing TMP 3D text in scene for displaying live MQTT data.")]
     public TextMeshPro debugText;
 
-    // ── Cached display strings  -  one per topic (composed into debugText) ─────
+    // ── Cached display strings — one per topic (composed into debugText) ─────
     private string _connLine    = "MQTT: connecting...";
     private string _imuLine     = "/paddle IMU: waiting...";
     private string _btnLine     = "";
@@ -109,6 +121,11 @@ public class MqttController : MonoBehaviour
     private string _recvLine    = "";
     private string _posLine     = "";
     private string _signalLine  = "";
+    private string _fpgaTimeLine = "";
+
+    private static readonly DateTime UnixEpochUtc = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    private readonly Queue<PlayerBallSendStamp> _pendingPlayerBallSends = new Queue<PlayerBallSendStamp>();
+    private int _playerBallLatencySequence = 0;
 
     // ── Network status banner ──────────────────────────────────────────────────
     private GameObject bannerCanvasGO;
@@ -146,7 +163,7 @@ public class MqttController : MonoBehaviour
         {
             _connLine = "MQTT: no MqttReceiver ref";
             RefreshDebugText();
-            ShowBanner("MQTT not configured  -  running in offline mode");
+            ShowBanner("MQTT not configured — running in offline mode");
             Debug.LogWarning("[MqttController] MqttReceiver reference is null. Game will run without network.");
             return;
         }
@@ -168,7 +185,7 @@ public class MqttController : MonoBehaviour
         {
             _connLine = $"MQTT: event subscribe error: {e.Message}";
             RefreshDebugText();
-            ShowBanner($"MQTT setup error  -  running in offline mode");
+            ShowBanner($"MQTT setup error — running in offline mode");
             Debug.LogError($"[MqttController] Failed to subscribe to MQTT events: {e.Message}");
             return;
         }
@@ -191,7 +208,7 @@ public class MqttController : MonoBehaviour
         else
         {
             _connLine = "MQTT: disconnected";
-            ShowBanner("MQTT disconnected  -  running in offline mode");
+            ShowBanner("MQTT disconnected — running in offline mode");
         }
         RefreshDebugText();
     }
@@ -200,7 +217,7 @@ public class MqttController : MonoBehaviour
     {
         string err = _eventSender != null ? _eventSender.LastConnectionError : "unknown";
         _connLine = $"MQTT FAIL: {err}";
-        ShowBanner("MQTT connection failed  -  running in offline mode");
+        ShowBanner("MQTT connection failed — running in offline mode");
         Debug.LogWarning($"[MqttController] MQTT connection failed: {err}");
         RefreshDebugText();
     }
@@ -212,7 +229,7 @@ public class MqttController : MonoBehaviour
 
         if (!IsConnected)
         {
-            Debug.Log("[TEST] Skipping test publish  -  not connected.");
+            Debug.Log("[TEST] Skipping test publish — not connected.");
             yield break;
         }
 
@@ -249,6 +266,8 @@ public class MqttController : MonoBehaviour
 
     private void HandleOpponentBall(string json)
     {
+        PublishFpgaLatencyIfPending();
+
         OpponentBallPayload data;
         try { data = JsonConvert.DeserializeObject<OpponentBallPayload>(json); }
         catch (Exception e)
@@ -472,7 +491,7 @@ public class MqttController : MonoBehaviour
                 if (calPaddle != null)
                     calPaddle.ClearCachedBall();
 
-                // Reset court and paddle QR tracking so they re-scan
+                // Reset court and paddle AprilTag tracking so they re-scan
                 var calTracker = FindFirstObjectByType<PlaceTrackedImages>();
                 if (calTracker != null)
                 {
@@ -631,7 +650,7 @@ public class MqttController : MonoBehaviour
         }
 
         if (ballController == null)
-            Debug.LogWarning("[MqttController] FindBallController failed  -  PracticeBallController not found.");
+            Debug.LogWarning("[MqttController] FindBallController failed — PracticeBallController not found.");
 
         return ballController;
     }
@@ -692,7 +711,7 @@ public class MqttController : MonoBehaviour
         if (_uwbTimedOut)
         {
             _uwbTimedOut = false;
-            Debug.Log("[playerPosition] UWB restored  -  switching back from camera fallback.");
+            Debug.Log("[playerPosition] UWB restored — switching back from camera fallback.");
         }
 
         _posLine = $"/playerPos: uwb=({data.position.x:F2},{data.position.y:F2}) court=({courtLocal.x:F2},{courtLocal.z:F2})";
@@ -751,7 +770,7 @@ public class MqttController : MonoBehaviour
             _uwbTimedOut = true;
             _posLine = "/playerPos: FALLBACK (camera)";
             RefreshDebugText();
-            Debug.LogWarning("[playerPosition] UWB timed out  -  falling back to camera position.");
+            Debug.LogWarning("[playerPosition] UWB timed out — falling back to camera position.");
         }
 
         // ── Player marker ─────────────────────────────────────────────────────────
@@ -774,7 +793,7 @@ public class MqttController : MonoBehaviour
         }
 
         // ── UWB court anchoring ────────────────────────────────────────────────────
-        // UWB anchors are physically fixed at the net alongside the QR code.
+        // UWB anchors are physically fixed at the net alongside the AprilTag code.
         // Their positions in court-local space are known exactly (net centre = z=netZ, x=0).
         // We use the player tag's UWB-measured court-local position to compute where the
         // AR camera SHOULD be in world space, then move GameSpaceRoot to close the gap.
@@ -798,7 +817,7 @@ public class MqttController : MonoBehaviour
             Vector3 expectedWorld = gameSpaceRoot.TransformPoint(_uwbCourtLocal);
             Vector3 actualWorld   = Camera.main.transform.position;
 
-            // Horizontal error only  -  never correct vertical (Y)
+            // Horizontal error only — never correct vertical (Y)
             Vector3 errorWorld = actualWorld - expectedWorld;
             errorWorld.y = 0f;
             float errorMag = errorWorld.magnitude;
@@ -877,13 +896,16 @@ public class MqttController : MonoBehaviour
         {
             _pubLine += " [OFFLINE]";
             RefreshDebugText();
-            Debug.LogWarning($"[MqttController] Cannot publish  -  not connected. Data: {json}");
+            Debug.LogWarning($"[MqttController] Cannot publish — not connected. Data: {json}");
             return;
         }
 
         try
         {
+            double sentRealtimeSeconds = Time.realtimeSinceStartupAsDouble;
+            long sentUtcMs = UtcNowMilliseconds();
             _eventSender.Publish(unityPublishTopic, json);
+            TrackPlayerBallSend(sentRealtimeSeconds, sentUtcMs);
             _pubLine += " [SENT]";
             RefreshDebugText();
             Debug.Log($"[playerBall] Published: {json}");
@@ -898,8 +920,8 @@ public class MqttController : MonoBehaviour
 
     /// <summary>
     /// Publishes {"isCalibrated":1} to both calibration topics on the ESP32.
-    /// /positionCalibration  -  UWB position calibration
-    /// /paddleCalibration   -  IMU paddle calibration
+    /// /positionCalibration — UWB position calibration
+    /// /paddleCalibration  — IMU paddle calibration
     /// </summary>
     public void PublishCalibration()
     {
@@ -907,7 +929,7 @@ public class MqttController : MonoBehaviour
 
         if (_eventSender == null || !IsConnected)
         {
-            Debug.LogWarning("[MqttController] Cannot publish calibration  -  not connected.");
+            Debug.LogWarning("[MqttController] Cannot publish calibration — not connected.");
             return;
         }
 
@@ -930,7 +952,7 @@ public class MqttController : MonoBehaviour
     {
         if (_eventSender == null || !IsConnected)
         {
-            Debug.LogWarning("[MqttController] Cannot publish hit ack  -  not connected.");
+            Debug.LogWarning("[MqttController] Cannot publish hit ack — not connected.");
             return;
         }
 
@@ -1049,7 +1071,7 @@ public class MqttController : MonoBehaviour
         {
             _pubLine += " [OFFLINE]";
             RefreshDebugText();
-            Debug.LogWarning($"[MqttController] Cannot publish {topic}  -  not connected. Data: {json}");
+            Debug.LogWarning($"[MqttController] Cannot publish {topic} — not connected. Data: {json}");
             return;
         }
 
@@ -1172,6 +1194,87 @@ public class MqttController : MonoBehaviour
             debugText.text += "\n" + _posLine;
         if (!string.IsNullOrEmpty(_signalLine))
             debugText.text += "\n" + _signalLine;
+        if (!string.IsNullOrEmpty(_fpgaTimeLine))
+            debugText.text += "\n" + _fpgaTimeLine;
+    }
+
+    private void TrackPlayerBallSend(double sentRealtimeSeconds, long sentUtcMs)
+    {
+        if (!publishFpgaLatency)
+            return;
+
+        while (_pendingPlayerBallSends.Count >= Mathf.Max(1, maxPendingFpgaLatencySamples))
+            _pendingPlayerBallSends.Dequeue();
+
+        _playerBallLatencySequence++;
+        _pendingPlayerBallSends.Enqueue(new PlayerBallSendStamp
+        {
+            sequence = _playerBallLatencySequence,
+            sentRealtimeSeconds = sentRealtimeSeconds,
+            sentUtcMs = sentUtcMs
+        });
+    }
+
+    private void PublishFpgaLatencyIfPending()
+    {
+        if (!publishFpgaLatency)
+            return;
+
+        if (_pendingPlayerBallSends.Count == 0)
+        {
+            Debug.Log("[MqttController] /opponentBall received with no pending /playerBall timestamp for /fpgaTime.");
+            return;
+        }
+
+        PlayerBallSendStamp stamp = _pendingPlayerBallSends.Dequeue();
+        double receivedRealtimeSeconds = Time.realtimeSinceStartupAsDouble;
+        long receivedUtcMs = UtcNowMilliseconds();
+        double latencyMs = Math.Max(0.0, (receivedRealtimeSeconds - stamp.sentRealtimeSeconds) * 1000.0);
+
+        FpgaTimePayload payload = new FpgaTimePayload
+        {
+            sequence = stamp.sequence,
+            requestTopic = unityPublishTopic,
+            responseTopic = "/opponentBall",
+            sentUtcMs = stamp.sentUtcMs,
+            receivedUtcMs = receivedUtcMs,
+            latencyMs = latencyMs,
+            sentUnityRealtimeSeconds = stamp.sentRealtimeSeconds,
+            receivedUnityRealtimeSeconds = receivedRealtimeSeconds,
+            pendingAfterReceive = _pendingPlayerBallSends.Count
+        };
+
+        string latencyJson = JsonConvert.SerializeObject(payload);
+        _fpgaTimeLine = $"{fpgaLatencyTopic} seq:{payload.sequence} {latencyMs:F1}ms";
+        RefreshDebugText();
+
+        if (_eventSender == null || !IsConnected)
+        {
+            Debug.LogWarning($"[MqttController] Cannot publish {fpgaLatencyTopic} — not connected. Data: {latencyJson}");
+            return;
+        }
+
+        try
+        {
+            _eventSender.Publish(fpgaLatencyTopic, latencyJson);
+            Debug.Log($"[{fpgaLatencyTopic}] Published: {latencyJson}");
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"[MqttController] Failed to publish {fpgaLatencyTopic}: {e.Message}");
+        }
+    }
+
+    private static long UtcNowMilliseconds()
+    {
+        return (long)(DateTime.UtcNow - UnixEpochUtc).TotalMilliseconds;
+    }
+
+    private struct PlayerBallSendStamp
+    {
+        public int sequence;
+        public double sentRealtimeSeconds;
+        public long sentUtcMs;
     }
 
     private void OnDestroy()
@@ -1206,6 +1309,20 @@ public class PlayerBallPayload
 {
     public Vec3 position;
     public VelocityData velocity;
+}
+
+[Serializable]
+public class FpgaTimePayload
+{
+    public int sequence;
+    public string requestTopic;
+    public string responseTopic;
+    public long sentUtcMs;
+    public long receivedUtcMs;
+    public double latencyMs;
+    public double sentUnityRealtimeSeconds;
+    public double receivedUnityRealtimeSeconds;
+    public int pendingAfterReceive;
 }
 
 [Serializable]

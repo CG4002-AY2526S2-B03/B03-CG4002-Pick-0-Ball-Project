@@ -42,7 +42,7 @@ public class PaddlePayload
 /// <summary>
 /// Raw packet from the ESP32 on /paddle topic.
 /// ESP32 sends two schemas: type="imu" (position + velocity) and type="button" (button id).
-/// Field names differ from PaddlePayload  -  this DTO matches the wire format exactly.
+/// Field names differ from PaddlePayload — this DTO matches the wire format exactly.
 /// </summary>
 [Serializable]
 public class Esp32Packet

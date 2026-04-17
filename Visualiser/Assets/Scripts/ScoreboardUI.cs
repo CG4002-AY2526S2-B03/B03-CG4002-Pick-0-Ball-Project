@@ -10,7 +10,7 @@ using UnityEngine.UI;
 ///   │ Set 1 | Serve                        │  ← top-left: state
 ///   │ Player 0 - 0 Bot  Sets: 0-0         │  ← top-left: score
 ///   │                                      │
-///   │            Net fault  -  Bot point      │  ← center: message (fades)
+///   │            Net fault — Bot point      │  ← center: message (fades)
 ///   │                                      │
 ///   └──────────────────────────────────────┘
 /// </summary>
@@ -172,11 +172,11 @@ public class ScoreboardUI : MonoBehaviour
         if (scoreText == null || gameState == null) return;
         if (gameState.Mode == GameStateManager.GameMode.Tutorial)
         {
-            scoreText.text = "Practice Mode  -  no scoring";
+            scoreText.text = "Practice Mode — no scoring";
         }
         else if (gameState.Mode == GameStateManager.GameMode.GodMode)
         {
-            scoreText.text = "God Mode  -  no scoring";
+            scoreText.text = "God Mode — no scoring";
         }
         else
         {
@@ -245,7 +245,7 @@ public class ScoreboardUI : MonoBehaviour
         sensorText.text =
             "<b>Sensors</b>\n" +
             FormatSensorLine("IMU", GetImuStatus(), GetImuDetail()) + "\n" +
-            FormatSensorLine("QR", GetQrStatus(), GetQrDetail()) + "\n" +
+            FormatSensorLine("AprilTag", GetQrStatus(), GetQrDetail()) + "\n" +
             FormatSensorLine("UWB", GetUwbStatus(), GetUwbDetail()) + "\n" +
             FormatSensorLine("ARKit", GetArkitStatus(), GetArkitDetail()) + "\n" +
             $"<color=#D0D0D0>Mode  {GetControlModeDetail()}</color>";

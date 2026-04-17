@@ -186,7 +186,7 @@ public class BotHitController : MonoBehaviour
     /// </summary>
     public void SetMLPrediction(Vector3 position, Vector3 velocity, int swingType)
     {
-        // Always accept new predictions  -  each player hit generates a fresh one
+        // Always accept new predictions — each player hit generates a fresh one
 
         pendingBallPosition = position;
         pendingBallVelocity = velocity;
@@ -229,7 +229,7 @@ public class BotHitController : MonoBehaviour
             if (Time.unscaledTime - lastNullBallLogTime > 1f)
             {
                 lastNullBallLogTime = Time.unscaledTime;
-                Debug.LogWarning("[Bot] ball is null  -  bot cannot move");
+                Debug.LogWarning("[Bot] ball is null — bot cannot move");
             }
             return;
         }
@@ -255,7 +255,7 @@ public class BotHitController : MonoBehaviour
         if (gameState == null || !gameState.IsStarted)
             return;
 
-        // Only fire during an active rally  -  never auto-promote from WaitingToServe
+        // Only fire during an active rally — never auto-promote from WaitingToServe
         if (gameState.State != GameStateManager.RallyState.InPlay)
             return;
 
@@ -272,7 +272,7 @@ public class BotHitController : MonoBehaviour
         if (_ballWasOnPlayerSide && !ballOnPlayerSide)
             _ballOnBotSide = true;
 
-        // Ball went back to player side  -  missed, reset and don't chase
+        // Ball went back to player side — missed, reset and don't chase
         if (ballOnPlayerSide)
         {
             _ballOnBotSide = false;
@@ -300,7 +300,7 @@ public class BotHitController : MonoBehaviour
         if (botDistToTarget > mlHitPositionTolerance)
             return; // still moving to position, wait
 
-        // Step 2: bot is in position  -  wait for ball to be within strike range
+        // Step 2: bot is in position — wait for ball to be within strike range
         // Convert both to court-local space (ball is in DontDestroyOnLoad, different world coords)
         Transform courtRoot = transform.parent;
         Vector3 ballLocal = courtRoot != null ? courtRoot.InverseTransformPoint(ball.position) : ball.position;
@@ -315,7 +315,7 @@ public class BotHitController : MonoBehaviour
         {
             lastHitTime = Time.time;
             _ballOnBotSide = false;
-            Debug.Log($"[Bot Hit][ZCrossing] In position and ball in range (ballDist={ballDist:F2})  -  firing.");
+            Debug.Log($"[Bot Hit][ZCrossing] In position and ball in range (ballDist={ballDist:F2}) — firing.");
             ExecuteReturnHit(ballRb);
         }
     }
@@ -689,7 +689,7 @@ public class BotHitController : MonoBehaviour
 
         switch (swingType)
         {
-            case 0: // Drive  -  forehand or backhand based on ball side
+            case 0: // Drive — forehand or backhand based on ball side
                 PlayHitAnimation();
                 break;
             case 1: // Drop
@@ -787,7 +787,7 @@ public class BotHitController : MonoBehaviour
         else if (ball == null && Time.unscaledTime - lastNullBallLogTime > 1f)
         {
             lastNullBallLogTime = Time.unscaledTime;
-            Debug.LogWarning("[Bot] TryResolveBall failed  -  no live PracticeBallController or ball transform found.");
+            Debug.LogWarning("[Bot] TryResolveBall failed — no live PracticeBallController or ball transform found.");
         }
 
         return ball != null;

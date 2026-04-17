@@ -228,28 +228,28 @@ stateDiagram-v2
     [*] --> CameraFallback : No sensors
 
     CameraFallback --> IMUOnly : First IMU payload received
-    CameraFallback --> FreshQR : QR detected, no IMU
+    CameraFallback --> FreshAprilTag : AprilTag detected, no IMU
 
-    IMUOnly --> FreshQR_IMU : QR detected
+    IMUOnly --> FreshAprilTag_IMU : AprilTag detected
 
-    FreshQR --> FreshQR_IMU : IMU activated
+    FreshAprilTag --> FreshAprilTag_IMU : IMU activated
 
-    FreshQR_IMU --> StaleQR_IMU : QR tracking lost\n(paddle rotated away)
+    FreshAprilTag_IMU --> StaleAprilTag_IMU : AprilTag tracking lost\n(paddle rotated away)
 
-    StaleQR_IMU --> FreshQR_IMU : QR restored\n(snap back, reset stalePos)
+    StaleAprilTag_IMU --> FreshAprilTag_IMU : AprilTag restored\n(snap back, reset stalePos)
 
-    FreshQR --> StaleQR : QR lost (no IMU)
-    StaleQR --> FreshQR : QR restored
+    FreshAprilTag --> StaleAprilTag : AprilTag lost (no IMU)
+    StaleAprilTag --> FreshAprilTag : AprilTag restored
 
-    note right of FreshQR_IMU
-        Position = QR pose
-        Rotation = QR pose
+    note right of FreshAprilTag_IMU
+        Position = AprilTag pose
+        Rotation = AprilTag pose
         Velocity = IMU
         Auto-calibrates imuToWorldOffset each frame
     end note
 
-    note right of StaleQR_IMU
-        Position = lastQR + sum(v*dt + swing arc)
+    note right of StaleAprilTag_IMU
+        Position = lastAprilTag + sum(v*dt + swing arc)
         Rotation = imuToWorldOffset * calibratedIMU
         Velocity = IMU
     end note
@@ -301,16 +301,16 @@ sequenceDiagram
     participant AI as Ultra96
     participant GS as GameStateManager
 
-    Note over ESP,GS: PHASE 1  -  IMU STREAMING
+    Note over ESP,GS: PHASE 1 — IMU STREAMING
     ESP->>MQTT: /paddle {"type":"imu",...}
     MQTT->>IMU: SetPayload()
     IMU->>PAD: PaddleVelocity, WorldRotation
 
-    Note over ESP,GS: PHASE 2  -  SERVE
+    Note over ESP,GS: PHASE 2 — SERVE
     BALL->>BALL: ResetBall() → spawn at serve position
     Note over BALL: Ball dropped with gravity, player swings
 
-    Note over ESP,GS: PHASE 3  -  PLAYER HIT
+    Note over ESP,GS: PHASE 3 — PLAYER HIT
     alt Collision-based (paths 1-4)
         BCD->>PAD: OnCollisionEnter → ApplyHitImpulse()
     else Flick assist (path 5, IMU-gated)
@@ -323,12 +323,12 @@ sequenceDiagram
     PAD->>MQTT: PublishHitAcknowledge()
     MQTT->>ESP: /hitAck → vibration motor
 
-    Note over ESP,GS: PHASE 4  -  AI RESPONSE
+    Note over ESP,GS: PHASE 4 — AI RESPONSE
     MQTT->>AI: /playerBall {position, velocity}
     AI->>MQTT: /opponentBall {position, velocity, returnSwingType}
     MQTT->>BOT: SetMLPrediction(worldPos, worldVel, swingType)
 
-    Note over ESP,GS: PHASE 5  -  BOT HIT
+    Note over ESP,GS: PHASE 5 — BOT HIT
     BOT->>BOT: TryHit → ball enters trigger
     BOT->>BOT: Apply shot profile velocity
     alt GodMode
@@ -336,7 +336,7 @@ sequenceDiagram
     end
     BOT->>GS: RegisterBotHit(shotType)
 
-    Note over ESP,GS: PHASE 6  -  RALLY CONTINUES OR POINT
+    Note over ESP,GS: PHASE 6 — RALLY CONTINUES OR POINT
     alt Ball hits boundary
         BALL->>GS: OnBallOutPlayerSide / OnBallOutBotSide / OnBallHitNet
         GS->>GS: AwardPoint()
@@ -368,13 +368,13 @@ sequenceDiagram
     MQTT->>ESP: /positionCalibration {"isCalibrated":1}
     MQTT->>ESP: /paddleCalibration {"isCalibrated":1}
 
-    Note over IMU: While QR is active (every frame):
-    loop QR Active
+    Note over IMU: While AprilTag is active (every frame):
+    loop AprilTag Active
         IMU->>IMU: UpdateWorldOffset(qrWorldRotation)
         IMU->>IMU: imuToWorldOffset = qrRot * Inv(calibratedIMU)
     end
 
-    Note over IMU: When QR lost:
+    Note over IMU: When AprilTag lost:
     IMU->>IMU: imuToWorldOffset frozen
     IMU->>IMU: WorldRotation = imuToWorldOffset * calibratedIMU
 ```
@@ -515,7 +515,7 @@ flowchart TB
     end
 
     subgraph Court["Physical Court"]
-        QR["QR Code\n(net centre)"]
+        AprilTag["AprilTag Code\n(net centre)"]
     end
 
     ESP32 -->|"Wi-Fi\n/paddle"| MOSQUITTO
@@ -533,7 +533,7 @@ flowchart TB
     ESP32 -->|"Wi-Fi\n/playerPosition\n(trilateration result)"| MOSQUITTO
     MOSQUITTO -->|"/playerPosition"| iPhone
 
-    QR -.->|"ARKit image tracking"| iPhone
+    AprilTag -.->|"ARKit image tracking"| iPhone
 
     Ultra96 -->|"status/u96"| MOSQUITTO
     MOSQUITTO -->|"system/signal"| Ultra96

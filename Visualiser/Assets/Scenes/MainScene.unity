@@ -1144,7 +1144,6 @@ MonoBehaviour:
   staleImuMaxDrift: 2
   staleImuLinearVelocityScale: 3
   staleImuPredictionSeconds: 0
-  staleAbandonAfterSeconds: 0.5
   staleImuVelocityDeadzone: 0.002
   staleImuVelocitySmoothing: 4
   staleImuAnchorReturnRate: 0.7
@@ -5093,7 +5092,7 @@ MonoBehaviour:
   groundPlanePadding: 2
   bounceDedupeSeconds: 0.05
   gameState: {fileID: 2064620428}
-  godModeSlowdownMultiplier: 0.6
+  godModeServeDropGravityScale: 0.5
   mqttController: {fileID: 0}
   publishBounceDiagnosticsToMqtt: 0
   resetKey: 114

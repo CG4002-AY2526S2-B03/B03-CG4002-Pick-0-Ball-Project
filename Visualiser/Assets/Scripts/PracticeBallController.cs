@@ -37,7 +37,7 @@ public class PracticeBallController : MonoBehaviour
             else
             {
                 // If the ball exists but is inactive in hierarchy (parent deactivated),
-                // still return it  -  callers are responsible for activating.
+                // still return it — callers are responsible for activating.
                 return Instance;
             }
         }
@@ -48,7 +48,7 @@ public class PracticeBallController : MonoBehaviour
         {
             Instance = found;
             // If the ball exists but is inactive in hierarchy (parent deactivated),
-            // still return it  -  callers are responsible for activating.
+            // still return it — callers are responsible for activating.
             return found;
         }
 
@@ -77,7 +77,7 @@ public class PracticeBallController : MonoBehaviour
     public Transform servePoint;
 
     [Tooltip("When set, the ball spawns near the paddle's last known position " +
-             "(from QR tracking) at serveHeight above the court. Best for serving.")]
+             "(from AprilTag tracking) at serveHeight above the court. Best for serving.")]
     public PaddleHitController paddleController;
 
     [Header("Serve Position (local to GameSpaceRoot)")]
@@ -159,9 +159,9 @@ public class PracticeBallController : MonoBehaviour
     public GameStateManager gameState;
 
     [Header("God Mode")]
-    [Tooltip("Global ball speed multiplier applied to player-hit and waiting-to-serve rebound velocities in God Mode.")]
+    [Tooltip("Gravity scale applied only while the serve ball is dropping/bouncing in WaitingToServe during God Mode. Player serve/hit velocity is not scaled.")]
     [Range(0f, 1f)]
-    public float godModeSlowdownMultiplier = 0.6f;
+    public float godModeServeDropGravityScale = 0.5f;
 
     [Header("Bounce Diagnostics")]
     [Tooltip("Optional MQTT controller used to publish bounce decision telemetry.")]
@@ -260,12 +260,12 @@ public class PracticeBallController : MonoBehaviour
         // Detach from GameSpaceRoot so ARFoundation destroying the anchor
         // (or any other cause of GameSpaceRoot destruction) cannot cascade to the ball.
         // We keep the gameSpaceRoot *reference* for local-coordinate math.
-        // IMPORTANT: Do NOT call DontDestroyOnLoad  -  that moves the ball to a separate
+        // IMPORTANT: Do NOT call DontDestroyOnLoad — that moves the ball to a separate
         // physics scene and breaks collision detection with the paddle and court floor.
         if (!_isCreatingBackup)
         {
             transform.SetParent(null, true);
-            Debug.Log("[Ball] Detached from GameSpaceRoot  -  stays in main scene for physics.");
+            Debug.Log("[Ball] Detached from GameSpaceRoot — stays in main scene for physics.");
         }
     }
 
@@ -288,7 +288,7 @@ public class PracticeBallController : MonoBehaviour
     private void OnDestroy()
     {
         LogBallEvent("OnDestroy");
-        Debug.LogWarning($"[Ball] OnDestroy STACK TRACE  -  who destroyed the ball?\n{System.Environment.StackTrace}");
+        Debug.LogWarning($"[Ball] OnDestroy STACK TRACE — who destroyed the ball?\n{System.Environment.StackTrace}");
         if (Instance == this)
             Instance = null;
     }
@@ -366,7 +366,7 @@ public class PracticeBallController : MonoBehaviour
                 || distanceFromCourt > maxWorldDistance
                 || localY < minWorldY)
             {
-                Debug.LogWarning("[Ball] Invalid or out-of-bounds state detected  -  forcing reset.");
+                Debug.LogWarning("[Ball] Invalid or out-of-bounds state detected — forcing reset.");
                 ForceRecoverBall("InvalidOrOutOfBoundsState");
                 return;
             }
@@ -426,6 +426,8 @@ public class PracticeBallController : MonoBehaviour
         if (ballRigidbody == null)
             return;
 
+        ApplyGodModeServeDropGravityScale();
+
         // Cache pre-solve velocity so collision callbacks can estimate
         // inbound speed even when relativeVelocity is damped by solver timing.
         lastFixedLinearVelocity = ballRigidbody.linearVelocity;
@@ -452,7 +454,7 @@ public class PracticeBallController : MonoBehaviour
         if (!TryReactivateForReset())
             return;
 
-        // Fully sanitise the Rigidbody before repositioning  - 
+        // Fully sanitise the Rigidbody before repositioning —
         // clears NaN and corrupted physics state
         SanitiseRigidbody();
 
@@ -517,7 +519,7 @@ public class PracticeBallController : MonoBehaviour
         }
         else
         {
-            // No camera  -  fall back to a known-good serve position at resetHeight
+            // No camera — fall back to a known-good serve position at resetHeight
             targetWorldPosition = GetFallbackServeWorldPosition();
         }
 
@@ -617,7 +619,7 @@ public class PracticeBallController : MonoBehaviour
             {
                 if (placementPending && gameSpaceRoot != null && t == gameSpaceRoot)
                 {
-                    Debug.Log("[Ball] ResetBall deferred: GameSpaceRoot is intentionally hidden until court QR placement.");
+                    Debug.Log("[Ball] ResetBall deferred: GameSpaceRoot is intentionally hidden until court AprilTag placement.");
                     return false;
                 }
 
@@ -647,7 +649,7 @@ public class PracticeBallController : MonoBehaviour
         if (corrupted)
         {
             if (enableDebugLogs)
-                Debug.LogWarning("[BallDebug] Rigidbody corrupted (NaN/Inf)  -  reconstructing.");
+                Debug.LogWarning("[BallDebug] Rigidbody corrupted (NaN/Inf) — reconstructing.");
             // Temporarily disable and re-enable to force Unity to reset internal physics state
             ballRigidbody.isKinematic = true;
             transform.position = GetFallbackServeWorldPosition();
@@ -745,12 +747,29 @@ public class PracticeBallController : MonoBehaviour
         return gameState != null && gameState.Mode == GameStateManager.GameMode.GodMode;
     }
 
-    public Vector3 ApplyGodModeBallSpeed(Vector3 velocity)
+    private void ApplyGodModeServeDropGravityScale()
     {
-        if (!IsGodModeActive())
-            return velocity;
+        if (!ShouldApplyGodModeServeDropGravityScale())
+            return;
 
-        return velocity * Mathf.Clamp01(godModeSlowdownMultiplier);
+        float gravityScale = Mathf.Clamp01(godModeServeDropGravityScale);
+        if (gravityScale >= 0.999f)
+            return;
+
+        // Unity applies full global gravity automatically. Counteract part of it so
+        // only the pre-serve God Mode drop is slowed; player hit velocity remains unchanged.
+        ballRigidbody.AddForce(-Physics.gravity * (1f - gravityScale), ForceMode.Acceleration);
+    }
+
+    private bool ShouldApplyGodModeServeDropGravityScale()
+    {
+        return IsGodModeActive()
+            && gameState != null
+            && gameState.State == GameStateManager.RallyState.WaitingToServe
+            && ballRigidbody != null
+            && ballRigidbody.useGravity
+            && !ballRigidbody.isKinematic
+            && !isManagedFrozen;
     }
 
     /// <summary>
@@ -774,7 +793,7 @@ public class PracticeBallController : MonoBehaviour
 
     private Vector3 GetFallbackServeWorldPosition()
     {
-        // Priority 1: spawn near the paddle's last known position (from QR tracking)
+        // Priority 1: spawn near the paddle's last known position (from AprilTag tracking)
         // at resetHeight above the court. This puts the ball right where the player
         // is holding the racket, ready for an underhand serve.
         if (paddleController != null && gameSpaceRoot != null)
@@ -1028,7 +1047,7 @@ public class PracticeBallController : MonoBehaviour
         }
 
         // Any ball that stays within groundCheckHeight of the court floor for longer
-        // than stuckTimeout is considered rolling/stuck  -  regardless of speed. A
+        // than stuckTimeout is considered rolling/stuck — regardless of speed. A
         // normally bouncing ball only grazes that band briefly between bounces so
         // the timer resets; only a rolling or stalled ball accumulates past the
         // timeout.
@@ -1047,7 +1066,7 @@ public class PracticeBallController : MonoBehaviour
 
                     if (enableDebugLogs)
                     {
-                        Debug.LogWarning("[BallDebug] Ball rolled/stalled before a valid return bounce  -  recovering without scoring.");
+                        Debug.LogWarning("[BallDebug] Ball rolled/stalled before a valid return bounce — recovering without scoring.");
                     }
                     PublishBounceLifecycleEvent("StuckRecoveryReset", "InPlayBeforeValidReturn");
                     ForceRecoverBall("StuckInPlayBeforeValidReturn");
@@ -1055,7 +1074,7 @@ public class PracticeBallController : MonoBehaviour
                 else
                 {
                     if (enableDebugLogs)
-                        Debug.LogWarning("[BallDebug] Ball became stuck/rolling outside active rally  -  forcing reset.");
+                        Debug.LogWarning("[BallDebug] Ball became stuck/rolling outside active rally — forcing reset.");
                     PublishBounceLifecycleEvent("StuckRecoveryReset", "WaitingToServe");
                     ForceRecoverBall("StuckWaitingToServe");
                 }
@@ -1072,13 +1091,13 @@ public class PracticeBallController : MonoBehaviour
             return false;
 
         // Primary: the last hitter successfully cleared the net. Opponent failed to
-        // return the ball before it stalled  -  award to the rally owner.
+        // return the ball before it stalled — award to the rally owner.
         if (hasCrossedNetAfterLastHit && gameState.LastHitter != GameStateManager.Hitter.None)
         {
             bool lastHitterIsPlayer = gameState.LastHitter == GameStateManager.Hitter.Player;
             if (enableDebugLogs)
             {
-                Debug.LogWarning($"[BallDebug] Stuck live ball  -  rally owner wins (HasCrossedNet). LastHitter={gameState.LastHitter}");
+                Debug.LogWarning($"[BallDebug] Stuck live ball — rally owner wins (HasCrossedNet). LastHitter={gameState.LastHitter}");
             }
             PublishBounceLifecycleEvent("StuckRecoveryOwnerAward", "HasCrossedNet");
             // OnDoubleBounceOnSide awards to the side opposite bouncedOnPlayerSide,
@@ -1087,14 +1106,14 @@ public class PracticeBallController : MonoBehaviour
             return true;
         }
 
-        // Secondary: two or more accepted bounces on a known side  -  finalise as a
+        // Secondary: two or more accepted bounces on a known side — finalise as a
         // double-bounce fault against that side.
         if (consecutiveBounceCount >= 2 && consecutiveBounceSide != BounceCourtSide.Unknown)
         {
             bool bouncedOnPlayerSide = consecutiveBounceSide == BounceCourtSide.Player;
             if (enableDebugLogs)
             {
-                Debug.LogWarning($"[BallDebug] Stuck live ball had 2+ accepted same-side bounces  -  awarding via side={DescribeBounceCourtSide(consecutiveBounceSide)}");
+                Debug.LogWarning($"[BallDebug] Stuck live ball had 2+ accepted same-side bounces — awarding via side={DescribeBounceCourtSide(consecutiveBounceSide)}");
             }
             PublishBounceLifecycleEvent("StuckRecoveryDoubleBounceAward", "TwoSameSideBouncesRecorded");
             gameState.OnDoubleBounceOnSide(bouncedOnPlayerSide);
@@ -1415,7 +1434,7 @@ public class PracticeBallController : MonoBehaviour
                         {
                             Debug.LogWarning("[BallDebug] Ignored Net fault due to weak/non-planar/high-clear impact.");
                         }
-                        return; // don't skip physics  -  let the ball bounce
+                        return; // don't skip physics — let the ball bounce
                 }
             }
             else

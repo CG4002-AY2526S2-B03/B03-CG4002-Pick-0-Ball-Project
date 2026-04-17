@@ -18,7 +18,7 @@ const pathToSysCoordCert = "/etc/mosquitto/certs/laptop-client/laptop-client.crt
 const pathToSysCoordKey = "/etc/mosquitto/certs/laptop-client/laptop-client.key"
 
 var readyDevices = make(map[string]bool)
-var hasGameStarted = false
+var hasGameStarted = false // global flag
 
 const expectedDevices = 0 // u96-client, unity-client, esp32-paddle-client, esp32-player-client
 
@@ -28,7 +28,7 @@ func startSystemCoordinator() {
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tls://%s:%d", mqttBroker, mqttPort))
 	opts.SetClientID(sysCoordClientID)
-	opts.OnConnect = connectHandler // TODO: create new handler for this client
+	opts.OnConnect = connectHandler
 	opts.OnConnectionLost = connectLostHandler
 
 	// Loads CA certificate file

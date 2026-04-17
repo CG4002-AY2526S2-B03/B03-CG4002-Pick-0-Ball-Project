@@ -20,7 +20,7 @@ const ultra96Password = "raspberry."
 const ultra96IP = "172.26.191.218"
 
 const mqttBroker = "172.20.33.183"
-const mqttPort = 8883 // change for tls
+const mqttPort = 8883
 
 func main() {
 	// Properly handle user termination
@@ -75,6 +75,24 @@ SSHLoop:
 	cleanup(sshConn)
 }
 
+// Sets up an SSH connection to the Ultra96, using password authentication.
+func setupSSHConnection() (*ssh.Client, error) {
+	// Configure ULtra96 as an SSH client
+	u96Config := &ssh.ClientConfig{
+		Timeout: 5 * time.Second,
+		User:    "xilinx",
+		Auth: []ssh.AuthMethod{
+			ssh.Password(ultra96Password),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+
+	// Connect to the SSH server
+	fmt.Println("REMINDER: Turn on SOC VPN to connect to Ultra96 via SSH")
+	hostAddress := net.JoinHostPort(ultra96IP, "22")
+	return ssh.Dial("tcp", hostAddress, u96Config)
+}
+
 // Handles the reverse SSH tunnel.
 // Tells the Ultra96 to listen on port 8883 and forward any traffic through the SSH connection to the local MQTT broker.
 func setupTunnelWithRetry(conn *ssh.Client) error {
@@ -114,58 +132,6 @@ func setupTunnelWithRetry(conn *ssh.Client) error {
 	return nil
 }
 
-// Sets up an SSH connection to the Ultra96, using password authentication.
-func setupSSHConnection() (*ssh.Client, error) {
-	// Configure ULtra96 as an SSH client
-	u96Config := &ssh.ClientConfig{
-		Timeout: 5 * time.Second,
-		User:    "xilinx",
-		Auth: []ssh.AuthMethod{
-			ssh.Password(ultra96Password),
-		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}
-
-	// Connect to the SSH server
-	fmt.Println("REMINDER: Turn on SOC VPN to connect to Ultra96 via SSH")
-	hostAddress := net.JoinHostPort(ultra96IP, "22")
-	return ssh.Dial("tcp", hostAddress, u96Config)
-}
-
-// Handles the reverse SSH tunnel.
-// Tells the Ultra96 to listen on port 8883 and forward any traffic through the SSH connection to the local MQTT broker.
-func reverseTunnelHandler(conn *ssh.Client) {
-	// Remote Port Forwarding: opens port on U96, any connection to that port will be captured by this listener.
-	remoteListener, err := conn.Listen("tcp", "127.0.0.1:8883")
-	if err != nil {
-		log.Printf("unable to create remote listener: %v", err)
-		return
-	}
-	defer remoteListener.Close() // ensure listener is closed when function exits
-
-	for {
-		remoteConn, err := remoteListener.Accept() // blocking until client.connect() is made on U96:8883
-		if err != nil {
-			log.Printf("Accept connection failed: %v", err)
-			return
-		}
-
-		localConn, err := net.Dial("tcp", "localhost:8883") // Go program dials actual MQTT broker
-		if err != nil {
-			log.Printf("Dial to local MQTT broker failed: %v", err)
-			return
-		}
-
-		// GOROUTINE BRIDGE: Create two-way data pipe between remoteConn (U96:8883) and localConn (Broker:8883).
-		go func(r, l net.Conn) {
-			defer r.Close()
-			defer l.Close()
-			go io.Copy(l, r) // copies data from U96 to Broker
-			io.Copy(r, l)    // copies data from Broker to U96
-		}(remoteConn, localConn)
-	}
-}
-
 // Handler that runs the MQTT client script on the Ultra96 via the SSH session.
 // Output logs from the script are printed in the terminal.
 func runU96Script(conn *ssh.Client, terminateChan chan<- os.Signal) {
@@ -198,7 +164,6 @@ func runU96Script(conn *ssh.Client, terminateChan chan<- os.Signal) {
 		return
 	}
 
-	// Start a shell on the Ultra96 to execute commands. If program fails to start shell, trigger shutdown.
 	err = session.Shell()
 	if err != nil {
 		log.Println("[ERR] failed to start shell: ", err)
@@ -220,8 +185,7 @@ func runU96Script(conn *ssh.Client, terminateChan chan<- os.Signal) {
 		}
 	}()
 
-	// Note: based on initial AI program provided, the MQTT client script on the U96 has to run with root permissions. This will be removed on final project.
-	cmds := []string{"echo 'raspberry.' | sudo -S -E python3 -u ~/comms_v2/ai_u96_client.py"} //"netstat -an | grep 8883"
+	cmds := []string{"echo 'raspberry.' | sudo -S -E python3 -u ~/comms_v3/ai_u96_client.py"}
 	for _, cmd := range cmds {
 		stdinBuf.Write([]byte(cmd + "\n"))
 	}
